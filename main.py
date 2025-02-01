@@ -6,6 +6,10 @@ from itertools import combinations
 from openai import OpenAI
 import re
 
+def summeralize_conversation(conversation):
+    as_string = conversation.dump_to_string()
+    
+
 def extract_messages(input_string):
     if input_string == "DONE":
         return {}
@@ -13,7 +17,7 @@ def extract_messages(input_string):
     match = re.search(r"\$\$MESSAGES_START\$\$(.*?)\$\$MESSAGES_END\$\$", input_string, re.DOTALL)
     if not match:
         print(input_string)
-        raise ValueError("Input string does not contain valid message boundaries.")
+        raise ValueError("No messages found")
 
     messages_content = match.group(1).strip()
 
@@ -32,8 +36,8 @@ def extract_orders(input_string):
     match = re.search(r"\$\$ORDERS_START\$\$(.*?)\$\$ORDERS_END\$\$", input_string, re.DOTALL)
     if not match:
         print(input_string)
-        raise ValueError("Input string does not contain valid message boundaries.")
-
+        raise ValueError("No messages found")
+    
     messages_content = match.group(1).strip()
 
     # Parse the individual messages
@@ -81,11 +85,12 @@ def generate_player_battle_turn_system_prompt(player, power, other_powers, game,
     prompt.append("Just list the order, no need to explain your thinking, or add any form of structure othe then what has been asked for")
     return "".join(prompt)
 
-def generate_player_negotioation_system_prompt(player, power, other_powers, game, inter_player_message, rounds_left):
+def generate_player_negotioation_system_prompt(player, power, other_powers, game, inter_player_message, rounds_left, player_desc):
     prompt = []
     prompt.append("\n")
     prompt.append("You are playing as ")
     prompt.append(power + "\n")
+    prompt.append("Currently you are" + player_desc + "\n")
 
     prompt.append("The current state of the game")
     for power_name, power in game.powers.items():
@@ -169,6 +174,16 @@ class DiploController:
         self.players_to_power_map = players_to_power_map
         self.powers = powers
         self.negotiation_state = NegotionState(self.game)
+        self.player_descriptions = {}
+        
+        self.player_descriptions["TURKEY"] = "the Sick Man of Europe as the others people call you. No one will tell you to your face but you know it is true. You wish to do nothing but bring glory to the Ottoman Empire and Allah"
+        self.player_descriptions["RUSSIA"] = " never quite sure if you are European or Asian. Your culture is strong though in more ones then one. You might be having a revolution soon but for none the glory of the Tzar will not be diminished"
+        self.player_descriptions["ITALY"] = "a new country that is still trying to find its place in the world. Old is your culture, new is your nation, and those that brought you together are gone none"
+        self.player_descriptions["GERMANY"] = "The newest and possibly the strongest of all of the nations of Europe. You are the land of poets and thinkers but also of soldiers and war. You are the land of the future. No Prussian Field Marshall has ever surrendered"
+        self.player_descriptions["FRANCE"] = "Gual, the land of the Franks, the land of the Gauls, the land of the French. You are the land of the revolution, the land of the republic, the land of the empire. You are the land of the future. You are the land of the past. You are the land of the present. You are France"
+        self.player_descriptions["ENGLAND"] = "The Empire. Glory to God and Country and the King. Drown into this fight because of Belgium and the Kaiser. You will not let them show that might makes right, what a primative notion"
+        self.player_descriptions["AUSTRIA"] = "maybe too much to bear, and where this whole conflict started, in your darkest nights you wonder if the nation can endure. You are old, so old, and so tired. You are the land of the Hapsburgs, the land of the Holy Roman Empire, the land of the Austro-Hungarian Empire. You are Austria"
+        
 
     def add_message_to_conversation(self, sender, receiver, message):
         if sender == receiver:
@@ -200,7 +215,7 @@ class DiploController:
                 else:
                     single_message += conversation_log
                 inter_player_messages += single_message
-            prompt = generate_player_negotioation_system_prompt(power, character_name, filtered_list, self.game, inter_player_messages, self.negotiation_state.rounds_left)
+            prompt = generate_player_negotioation_system_prompt(power, character_name, filtered_list, self.game, inter_player_messages, self.negotiation_state.rounds_left, self.player_descriptions[power])
 
             completion = self.client.chat.completions.create(
                 model="gpt-4o",
@@ -261,7 +276,6 @@ class DiploController:
                 self.game.set_orders(power, order)
             #exit()
         self.game.process()
-        self.game.render(output_path="output_end.svg")
 
 
 class Conversation:
@@ -303,31 +317,14 @@ players_to_power_map = {
 
 controller = DiploController(powers_list, players_to_power_map)
 controller.game.render(output_path="output_start.svg")
-for i in range(0, 5):
-    controller.run_negotiation_turn()
-controller.game.process()
-print(controller.power_wrappers["TURKEY"].conversations["RUSSIA"].dump_to_string())
-print("Going to battle phase")
-controller.run_battle_turn()
-controller.negotiation_state = NegotionState(controller.game)
 
-controller.game.render(output_path="output_battle_1.svg")
-for i in range(0, 5):
-    controller.run_negotiation_turn()
-controller.run_battle_turn()
-controller.negotiation_state = NegotionState(controller.game)
-
-controller.game.render(output_path="output_battle_2.svg")
-for i in range(0, 5):
-    controller.run_negotiation_turn()
-controller.run_battle_turn()
-controller.negotiation_state = NegotionState(controller.game)
-controller.game.render(output_path="output_battle_3.svg")
-for i in range(0, 5):
-    controller.run_negotiation_turn()
-controller.run_battle_turn()
-controller.negotiation_state = NegotionState(controller.game)
-controller.game.render(output_path="output_battle_4.svg")
+for i in range(0, 10):
+    for j in range(0, 5):
+        controller.run_negotiation_turn()
+    controller.run_battle_turn()
+    controller.negotiation_state = NegotionState(controller.game)
+    output_path = "output_battle_" + str(i) + ".svg"
+    controller.game.render(output_path=output_path)
 exit()
 
 
